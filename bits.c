@@ -179,7 +179,7 @@ NOTES:
  *  Rating: 2
  */
 int sign(int x) {
-    return 2;
+    return ((!!x << 30) | x) >> 30;
 }
 /* 
  * upperBits - pads n upper bits with 1's
@@ -190,7 +190,7 @@ int sign(int x) {
  *  Rating: 1
  */
 int upperBits(int n) {
-  return 2;
+  return ((!!n << 31) >> (~0 + n));
 }
 /* 
  * bitXor - x^y using only ~ and & 
@@ -200,7 +200,7 @@ int upperBits(int n) {
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  return ~(~(x & ~(x & y)) & ~(y & ~(x & y)));
 }
 /* 
  * absVal - absolute value of x
@@ -211,7 +211,7 @@ int bitXor(int x, int y) {
  *   Rating: 4
  */
 int absVal(int x) {
-  return 2;
+  return (((x ^ 0) >> 31) ^ x) + (((x ^ 0) >> 31) & 1);
 }
 /* 
  * getByte - Extract byte n from word x
@@ -222,7 +222,7 @@ int absVal(int x) {
  *   Rating: 2
  */
 int getByte(int x, int n) {
-  return 2;
+  return (x >> (n << 3)) & 255;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -237,7 +237,18 @@ int getByte(int x, int n) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+	int n = 0;
+	int tmp = ~0;
+	
+	//binary search
+	x = x ^ (x << 1);
+	n = n + ((!!(x & (tmp << (n + 16)))) << 4);
+	n = n + ((!!(x & (tmp << (n + 8)))) << 3);
+	n = n + ((!!(x & (tmp << (n + 4)))) << 2);
+	n = n + ((!!(x & (tmp << (n + 2)))) << 1);
+	n = n + (!!(x & (tmp << (n + 1))));
+
+	return n + 1;
 }
 /* 
  * isGreater - if x > y  then return 1, else return 0 
@@ -246,8 +257,11 @@ int howManyBits(int x) {
  *   Max ops: 24
  *   Rating: 3
  */
-int isGreater(int x, int y) {
-  return 2;
+int isGreater(int x, int y) {	
+	int xs = x >> 31; //sign of x
+	int ys = y >> 31; //sign of y
+	int eq = (~(xs ^ ys) & ((~y + x) >> 31));
+	return !(eq | (xs & !ys));	
 }
 /* 
  * rotateRight - Rotate x to the right by n
@@ -258,7 +272,7 @@ int isGreater(int x, int y) {
  *   Rating: 3 
  */
 int rotateRight(int x, int n) {
-  return 2;
+  return ((~(1 << 31) >> (n + ~0)) | (x << (32 + ~n + 1))) & ((x >> n) | ((1 << 31) >> (n + ~0)));
 }
 /* 
  * bang - Compute !x without using !
@@ -268,7 +282,7 @@ int rotateRight(int x, int n) {
  *   Rating: 4 
  */
 int bang(int x) {
-  return 2;
+  return ((x | (~x + 1)) >> 31) + 1;
 }
 /* 
  * floatIsEqual - Compute f == g for floating point arguments f and g.
@@ -282,7 +296,15 @@ int bang(int x) {
  *   Rating: 2
  */
 int floatIsEqual(unsigned uf, unsigned ug) {
-    return 2;
+	unsigned a = (~0) + (1 << 23); //frac
+	unsigned ufm = ~(1 << 31) & uf; //mask of uf
+	unsigned ugm = ~(1 << 31) & ug; //mask of ug
+
+	if((ufm == 0) && (ugm == 0)) // check that +0 and -0 are equal
+		return 1;
+	if((((ufm >> 23) == 255) && ((a & uf) != 0)) || (((ugm >> 23) == 255) && ((a & ug) != 0))) //check that uf and ug are nan
+		return 0;
+	return (uf == ug);
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -298,7 +320,13 @@ int floatIsEqual(unsigned uf, unsigned ug) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+	//int inf = ~(-1 + (1 << 23)) & ~(1 << 31);
+	int exp = x + 127; //127 means bias
+	if(exp <= 0)
+		return 0;
+	else if(exp >= 255)
+		return 0x7f800000;
+	return exp << 23;
 }
 /* 
  * floatInt2Float - Return bit-level equivalent of expression (float) x
@@ -310,5 +338,38 @@ unsigned floatPower2(int x) {
  *   Rating: 4
  */
 unsigned floatInt2Float(int x) {
-  return 2;
+	int msb = x & 0x80000000; //Msb
+	int exp = 30; //Exponent
+	int frac = x; //Fraction
+
+	if(x == 0)
+		return 0;
+		
+	else if(x == 0x80000000)
+		return 0xcf000000;
+	
+	if(msb)
+		frac = (~frac + 1);
+
+	while(!(frac & (1 << exp)))
+		exp--;
+	
+	if(exp <= 23)
+		frac <<= (23 - exp);
+	else
+	{
+		frac += (1 << (exp - 24));
+		if(frac << (55 - exp))
+			;
+		else
+			frac &= (0xFFFFFFFF << (exp - 22));
+		if(frac & (1 << exp))
+			;
+		else
+			exp++;
+		frac >>= (exp - 23);
+	}
+	frac = frac & 0x7fffff;
+	exp = (exp + 127) << 23;
+	return msb | exp | frac;	
 }
