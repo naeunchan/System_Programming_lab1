@@ -225,7 +225,7 @@ if ($USE_BTEST) {
     print "\n";
 
     # Run btest
-    $status = system("./btest -g -r 2 > btest-Zapped.out 2>&1");
+    $status = system("./btest -T 0 -g -r 2 > btest-Zapped.out 2>&1");
     if ($status != 0) {
 	die "$0: ERROR: Zapped btest failed. $diemsg\n";
     }

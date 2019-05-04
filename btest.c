@@ -345,7 +345,7 @@ static int test_function(test_ptr t) {
     }
 
     /* Handle timeouts in the test code */
-    if (timeout_limit > 0) {
+    if (timeout_limit > 10) {
 	int rc;
 	rc = sigsetjmp(envbuf, 1);
 	if (rc) {
